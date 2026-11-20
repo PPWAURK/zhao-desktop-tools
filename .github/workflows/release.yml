@@ -42,9 +42,12 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME##*-v}"
           notes_file="$APP/RELEASE_NOTES.md"
-          if [ -f "$notes_file" ]; then notes_arg=(--notes-file "$notes_file"); else notes_arg=(--notes ""); fi
-          gh release create "$GITHUB_REF_NAME" --draft --title "$TITLE $version" "${notes_arg[@]}"
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id" | head -n1)
+          [ -f "$notes_file" ] || notes_file=/dev/null
+          # The REST call returns the draft's id directly (drafts are not found by tag lookups).
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$GITHUB_REF_NAME" -f name="$TITLE $version" \
+            -F draft=true -F body=@"$notes_file" --jq .id)
+          if [ -z "$id" ]; then echo "Could not create the draft release" >&2; exit 1; fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
   build:
@@ -118,7 +121,18 @@ jobs:
     needs: [prepare, build]
     runs-on: ubuntu-latest
     steps:
+      - name: Check that both installers are attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          names=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets[].name')
+          echo "$names"
+          echo "$names" | grep -qiE '\.(exe|msi)$' || { echo "Windows installer missing" >&2; exit 1; }
+          echo "$names" | grep -qiE '\.dmg$' || { echo "macOS DMG missing" >&2; exit 1; }
+
       - name: Publish the draft
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=true --jq .html_url
