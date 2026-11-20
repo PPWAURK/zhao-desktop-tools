@@ -19,6 +19,7 @@ const MIN_TAIL_SECONDS: f64 = 30.0;
 const ENCODE_SHARE: f64 = 0.98;
 const MAX_LOG_LINES: usize = 500;
 const PLAN_FILE: &str = "plan.txt";
+const CONCAT_LIST: &str = "concat.txt";
 const MIN_TARGET_MB: u32 = 5;
 const MAX_TARGET_MB: u32 = 100_000;
 
@@ -205,11 +206,14 @@ impl JobManager {
 
         self.set_file(index, |f| { f.progress = ENCODE_SHARE; f.message = "合并分段…".into(); });
         let partial = dir.join(format!(".{out_name}.part"));
-        let list = seg_dir.join("concat.txt");
         let list_body: String = seg_files.iter().map(|p| format!("file '{}'\n", file_name(p))).collect();
-        std::fs::write(&list, list_body).map_err(|e| failed(format!("无法写入分段列表：{e}")))?;
+        std::fs::write(seg_dir.join(CONCAT_LIST), list_body)
+            .map_err(|e| failed(format!("无法写入分段列表：{e}")))?;
+        // Windows ffmpeg's concat demuxer cannot open a list whose path has non-ASCII
+        // characters (e.g. "_分段_课程"), so run inside the segment folder with a relative name.
+        let args = media::concat_args(Path::new(CONCAT_LIST), &partial, req.codec);
         self.runner
-            .run(ffmpeg, &media::concat_args(&list, &partial, req.codec), |_, _| {})
+            .run(ffmpeg, &args, Some(&seg_dir), |_, _| {})
             .inspect_err(|_| { let _ = std::fs::remove_file(&partial); })?;
         std::fs::rename(&partial, &output).map_err(|e| failed(format!("无法保存结果：{e}")))?;
 
@@ -249,7 +253,7 @@ impl JobManager {
             self.set_file(index, |f| f.message = label.clone());
             let part = seg_dir.join(format!("seg_{i:03}.part"));
             let args = media::encode_args(input, &part, start, len, plan, settings);
-            let result = self.runner.run(ffmpeg, &args, |t, speed| {
+            let result = self.runner.run(ffmpeg, &args, None, |t, speed| {
                 let pct = ((done_s + t.min(seg_len)) / duration).clamp(0.0, 1.0) * ENCODE_SHARE;
                 self.set_file(index, |f| f.progress = pct);
                 if let Some(sp) = speed {
