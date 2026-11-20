@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>视频批量压缩工具</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%232563eb%27/%3E%3Cpath d=%27M12 9l11 7-11 7z%27 fill=%27white%27/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2129; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #2563eb; --accent-weak: #e8efff; --ok: #15803d; --ok-weak: #e7f6ec;
+    --warn: #b45309; --warn-weak: #fdf3e2; --bad: #b91c1c; --bad-weak: #fdecec;
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111317; --card:#1a1d23; --text:#e8eaed; --muted:#9aa0a6; --line:#2c313a;
+      --accent:#6b9bff; --accent-weak:#1d2a45; --ok:#4ade80; --ok-weak:#16301f;
+      --warn:#fbbf24; --warn-weak:#352a12; --bad:#f87171; --bad-weak:#3a1b1b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 22px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; display:flex; align-items:center; gap:8px; }
+  .step { display:inline-flex; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff;
+    font-size:12px; align-items:center; justify-content:center; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input[type=text], input[type=number], select {
+    font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  #dir { flex: 1; min-width: 260px; }
+  .field select { width: 100%; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .settings { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 22px; }
+  .field label { display:block; color: var(--muted); font-size: 12.5px; margin-bottom: 4px; }
+  .field .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .chip { padding: 3px 9px; font-size: 12px; border-radius: 999px; }
+  .chip.on { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
+  .target-input { display:flex; align-items:center; gap:6px; }
+  .target-input input { width: 110px; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { text-align:left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; white-space: nowrap; }
+  td.num, th.num { text-align:right; white-space:nowrap; font-variant-numeric: tabular-nums; }
+  td.name { word-break: break-all; max-width: 300px; }
+  .tag { display:inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
+  .q-good { background: var(--ok-weak); color: var(--ok); }
+  .q-mid { background: var(--accent-weak); color: var(--accent); }
+  .q-low { background: var(--warn-weak); color: var(--warn); }
+  .q-bad { background: var(--bad-weak); color: var(--bad); }
+  .muted { color: var(--muted); }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; min-width: 120px; }
+  .bar > i { display:block; height:100%; background: var(--accent); width:0; transition: width .4s; }
+  .status-cell { min-width: 170px; font-size: 12.5px; }
+  .empty { padding: 26px; text-align:center; color: var(--muted); }
+  .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 14px; }
+  .summary { margin-left:auto; color: var(--muted); }
+  .msg { padding: 10px 12px; border-radius: 8px; margin-top: 10px; display:none; }
+  .msg.show { display:block; }
+  .msg.err { background: var(--bad-weak); color: var(--bad); }
+  .msg.info { background: var(--accent-weak); color: var(--accent); }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--muted); }
+  pre#log { background: var(--bg); border:1px solid var(--line); border-radius: 8px; padding: 10px;
+    max-height: 240px; overflow:auto; font-size: 12px; white-space: pre-wrap; margin: 8px 0 0; }
+  .help { color: var(--muted); font-size: 13px; }
+  .help li { margin: 3px 0; }
+  .spin { display:inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent);
+    border-radius: 50%; animation: sp 0.8s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* 桌面应用：界面文字不可选，输入框/文件名/提示/日志仍可选 */
+  body { -webkit-user-select:none; user-select:none; cursor:default; }
+  input, textarea, pre, td, .msg, #summary { -webkit-user-select:text; user-select:text; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>视频批量压缩工具</h1>
+  <p class="sub">选文件夹 → 设大小上限 → 开始压缩。在你自己电脑上处理，视频不会上传，几十 GB 的 4K 录像也能压。</p>
+
+  <div class="card">
+    <h2><span class="step">1</span>选择视频所在的文件夹</h2>
+    <div class="row">
+      <button id="pickBtn">选择文件夹…</button>
+      <input id="dir" type="text" placeholder="或者把文件夹路径粘贴到这里">
+      <button id="scanBtn">读取视频</button>
+    </div>
+    <div id="dirMsg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="step">2</span>压缩设置</h2>
+    <div class="settings">
+      <div class="field">
+        <label>每个视频的大小上限</label>
+        <div class="target-input"><input id="target" type="number" min="5" step="1" value="250"><span>MB</span></div>
+        <div class="chips" id="presets">
+          <button class="chip" data-v="50">50 MB</button>
+          <button class="chip" data-v="250">250 MB · Lark 标准版</button>
+          <button class="chip" data-v="1000">1 GB</button>
+          <button class="chip" data-v="5000">5 GB</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>编码</label>
+        <select id="codec">
+          <option value="x265">H.265（推荐：同样大小画质更好）</option>
+          <option value="x264">H.264（兼容性最好，老设备也能播）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>帧率</label>
+        <select id="fps">
+          <option value="10">10 fps</option>
+          <option value="12" selected>12 fps（讲课 / PPT 录像推荐）</option>
+          <option value="15">15 fps</option>
+          <option value="24">24 fps</option>
+          <option value="30">30 fps（动作多的画面）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>音频</label>
+        <select id="audio">
+          <option value="24">24 kbps 单声道</option>
+          <option value="28" selected>28 kbps 单声道（人声够用）</option>
+          <option value="48">48 kbps 单声道</option>
+          <option value="64">64 kbps 单声道（音乐）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>临时文件</label>
+        <label style="color:var(--text);font-size:14px"><input id="clean" type="checkbox" checked> 压完自动删除分段临时文件</label>
+        <div class="hint">处理中会建「_分段_视频名」文件夹，中途停止可续跑</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="step">3</span>压缩方案与进度</h2>
+    <div id="tableWrap"><div class="empty">先在第 1 步选择文件夹并读取视频</div></div>
+    <div class="actions">
+      <button class="primary" id="startBtn" disabled>开始压缩</button>
+      <button class="danger" id="stopBtn" disabled>停止</button>
+      <button id="openBtn" disabled>打开文件夹</button>
+      <span class="summary" id="summary"></span>
+    </div>
+    <div id="runMsg" class="msg"></div>
+    <details>
+      <summary>运行日志</summary>
+      <pre id="log">（暂无）</pre>
+    </details>
+  </div>
+
+  <div class="card help">
+    <strong style="color:var(--text)">说明</strong>
+    <ul>
+      <li>压缩结果叫「原文件名_250MB.mp4」，放在原视频旁边；<b>原视频不会被修改</b>。</li>
+      <li>已经压过的会自动跳过；本来就小于上限的也会跳过。</li>
+      <li>4K 长录像比较耗时（每小时视频约十几到几十分钟，看电脑性能）。期间电脑别睡眠，外接硬盘别拔。</li>
+      <li>点「停止」或意外中断后，再点「开始压缩」会从中断的地方继续。</li>
+      <li>压缩期间电脑不会自动睡眠；用完直接关闭窗口即可退出。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const TIER_H = [1080, 720, 480, 360, 240];
+const TIER_MIN = [2500, 700, 250, 90, 25];
+const TIER_CAP = [6000, 2000, 900, 400, 150];
+const MUX_OVERHEAD_K = 6; // 与程序 plan.rs 保持一致：MP4 封装开销
+let videos = [];       // 扫描结果
+let selected = new Set();
+let jobState = null;
+let currentDir = "";
+let pollTimer = null;
+
+function settings() {
+  return {
+    targetMB: parseInt($("target").value, 10) || 0,
+    codec: $("codec").value,
+    fps: parseInt($("fps").value, 10),
+    audioK: parseInt($("audio").value, 10),
+    clean: $("clean").checked,
+  };
+}
+
+function plan(dur, s) {
+  if (dur < 1) dur = 1;
+  const total = Math.floor(s.targetMB * 0.95 * 8000 / dur);
+  let vk = total - s.audioK - MUX_OVERHEAD_K;
+  const mult = s.codec === "x264" ? 1.7 : 1;
+  for (let i = 0; i < TIER_H.length; i++) {
+    if (vk >= TIER_MIN[i] * mult) {
+      const cap = Math.floor(TIER_CAP[i] * mult);
+      if (vk > cap) vk = cap;
+      return { ok: true, height: TIER_H[i], videoK: vk, est: (vk + s.audioK) * dur / 8000 * 1.01 };
+    }
+  }
+  return { ok: false };
+}
+
+function quality(h) {
+  if (h >= 720) return ["清晰", "q-good"];
+  if (h === 480) return ["较清楚", "q-mid"];
+  if (h === 360) return ["偏糊", "q-low"];
+  return ["很糊", "q-bad"];
+}
+
+const fmtDur = (s) => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+const fmtSize = (b) => b >= 1e9 ? (b / 1e9).toFixed(2) + " GB" : (b / 1e6).toFixed(1) + " MB";
+const esc = (t) => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function showMsg(id, text, kind) {
+  const el = $(id);
+  el.className = "msg" + (text ? " show " + (kind || "info") : "");
+  el.textContent = text || "";
+}
+
+// 桌面版：页面通过 Tauri 命令调用本机程序（代替原来的本地网页服务）
+const COMMANDS = { "/api/scan": "scan_dir", "/api/pick": "pick_folder", "/api/start": "start_job",
+  "/api/stop": "stop_job", "/api/status": "job_status", "/api/reveal": "reveal_folder" };
+async function api(path, body) {
+  const cmd = COMMANDS[path];
+  if (!cmd) throw new Error("未知操作：" + path);
+  try {
+    const data = await window.__TAURI__.core.invoke(cmd, { req: body || {} });
+    return data == null ? {} : data;
+  } catch (e) {
+    throw new Error(typeof e === "string" ? e : (e && e.message) || "操作失败");
+  }
+}
+
+// ---------------- 渲染表格
+function render() {
+  const s = settings();
+  const running = jobState && jobState.running;
+  const jobFiles = {};
+  if (jobState && jobState.dir === currentDir) (jobState.files || []).forEach(f => jobFiles[f.name] = f);
+
+  if (!videos.length) {
+    $("tableWrap").innerHTML = '<div class="empty">' + (currentDir ? "这个文件夹里没有找到视频" : "先在第 1 步选择文件夹并读取视频") + "</div>";
+    updateButtons(); return;
+  }
+  let totalEst = 0, count = 0;
+  const allChecked = videos.every(v => selected.has(v.name));
+  let html = '<table><thead><tr><th><input type="checkbox" id="checkAll" ' + (allChecked ? "checked" : "") + (running ? " disabled" : "") +
+    '></th><th>视频</th><th class="num">时长</th><th class="num">原大小</th><th>压缩方案</th><th class="num">预计大小</th><th>状态</th></tr></thead><tbody>';
+  for (const v of videos) {
+    const jf = jobFiles[v.name];
+    let planCell = "", estCell = "", statusCell = "";
+    const tooSmall = v.size <= s.targetMB * 1e6;
+    if (v.error) {
+      planCell = '<span class="tag q-bad">' + esc(v.error) + "</span>";
+    } else if (tooSmall) {
+      planCell = '<span class="muted">不超过上限，无需压缩</span>';
+    } else {
+      const p = plan(v.duration, s);
+      if (p.ok) {
+        const [q, cls] = quality(p.height);
+        planCell = '<span class="tag ' + cls + '">' + p.height + "p · " + q + '</span> <span class="muted">视频 ' + p.videoK + "k</span>";
+        estCell = "≈ " + p.est.toFixed(0) + " MB";
+        if (selected.has(v.name)) { totalEst += p.est; count++; }
+      } else {
+        planCell = '<span class="tag q-bad">太长，压不到这个大小</span>';
+      }
+    }
+    const outName = v.name.replace(/\.[^.]+$/, "") + "_" + s.targetMB + "MB.mp4";
+    if (jf) {
+      const pct = Math.round((jf.progress || 0) * 100);
+      const map = { waiting: "等待中", running: "压缩中 " + pct + "%", done: "✅ " + (jf.message || "完成"),
+        skipped: "⏭ " + (jf.message || "跳过"), failed: "❌ " + (jf.message || "失败"), cancelled: "⏸ " + (jf.message || "已停止") };
+      statusCell = (jf.status === "running" ? '<span class="spin"></span> ' : "") + esc(map[jf.status] || jf.status);
+      if (jf.status === "running") statusCell += '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+        (jf.message ? '<div class="muted">' + esc(jf.message) + "</div>" : "");
+      if (jf.status === "done" && jf.outSize) statusCell += '<div class="muted">' + fmtSize(jf.outSize) + "</div>";
+    } else if ((v.outputs || []).includes(outName)) {
+      statusCell = '<span class="muted">已有 ' + esc(outName) + "</span>";
+    }
+    html += "<tr><td><input type='checkbox' data-name=\"" + esc(v.name) + "\" " + (selected.has(v.name) ? "checked" : "") +
+      (running ? " disabled" : "") + "></td><td class='name'>" + esc(v.name) +
+      (v.height ? '<div class="muted">' + v.width + "×" + v.height + " · " + esc(v.codec || "") + "</div>" : "") +
+      "</td><td class='num'>" + (v.duration ? fmtDur(v.duration) : "—") + "</td><td class='num'>" + fmtSize(v.size) +
+      "</td><td>" + planCell + "</td><td class='num'>" + estCell + "</td><td class='status-cell'>" + statusCell + "</td></tr>";
+  }
+  html += "</tbody></table>";
+  $("tableWrap").innerHTML = html;
+  $("summary").textContent = count ? `已选 ${count} 个需要压缩的视频，预计共 ${totalEst.toFixed(0)} MB` : "";
+  if (running && jobState.speed) $("summary").textContent = "处理速度 " + jobState.speed + "（1x = 实时）";
+
+  const ca = $("checkAll");
+  if (ca) ca.onchange = () => { videos.forEach(v => ca.checked ? selected.add(v.name) : selected.delete(v.name)); render(); };
+  document.querySelectorAll("input[data-name]").forEach(cb => cb.onchange = () => {
+    cb.checked ? selected.add(cb.dataset.name) : selected.delete(cb.dataset.name); render(); });
+  updateButtons();
+}
+
+function updateButtons() {
+  const running = !!(jobState && jobState.running);
+  $("startBtn").disabled = running || !videos.some(v => selected.has(v.name));
+  $("stopBtn").disabled = !running;
+  $("openBtn").disabled = !currentDir;
+  $("pickBtn").disabled = running; $("scanBtn").disabled = running;
+  $("startBtn").textContent = running ? "压缩中…" : "开始压缩";
+}
+
+// ---------------- 交互
+async function scan(dir) {
+  dir = (dir || $("dir").value).trim();
+  if (!dir) { showMsg("dirMsg", "请先选择或输入文件夹", "err"); return; }
+  showMsg("dirMsg", "正在读取视频信息…（视频多时需要几秒）", "info");
+  $("scanBtn").disabled = true;
+  try {
+    const data = await api("/api/scan", { dir });
+    currentDir = data.dir; $("dir").value = data.dir;
+    videos = data.videos || [];
+    selected = new Set(videos.filter(v => !v.error).map(v => v.name));
+    showMsg("dirMsg", `找到 ${videos.length} 个视频`, "info");
+    try { localStorage.setItem("vc_dir", currentDir); } catch (e) {}
+  } catch (e) {
+    showMsg("dirMsg", e.message, "err");
+  }
+  $("scanBtn").disabled = false;
+  render();
+}
+
+$("pickBtn").onclick = async () => {
+  showMsg("dirMsg", "", "info");
+  try { const d = await api("/api/pick", {}); $("dir").value = d.dir; await scan(d.dir); }
+  catch (e) { showMsg("dirMsg", e.message === "没有选择文件夹" ? "" : e.message, "err"); }
+};
+$("scanBtn").onclick = () => scan();
+$("dir").addEventListener("keydown", e => { if (e.key === "Enter") scan(); });
+["target", "codec", "fps", "audio"].forEach(id => $(id).addEventListener("input", () => { syncChips(); render(); saveSettings(); }));
+$("clean").addEventListener("change", saveSettings);
+document.querySelectorAll("#presets .chip").forEach(c => c.onclick = () => { $("target").value = c.dataset.v; syncChips(); render(); saveSettings(); });
+function syncChips() { document.querySelectorAll("#presets .chip").forEach(c => c.classList.toggle("on", c.dataset.v === $("target").value)); }
+
+function saveSettings() { try { localStorage.setItem("vc_settings", JSON.stringify(settings())); } catch (e) {} }
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem("vc_settings") || "null");
+    if (s) { $("target").value = s.targetMB; $("codec").value = s.codec; $("fps").value = s.fps; $("audio").value = s.audioK; $("clean").checked = s.clean; }
+    const d = localStorage.getItem("vc_dir"); if (d) $("dir").value = d;
+  } catch (e) {}
+  syncChips();
+}
+
+$("startBtn").onclick = async () => {
+  const s = settings();
+  if (s.targetMB < 5) { showMsg("runMsg", "大小上限至少 5 MB", "err"); return; }
+  const files = videos.filter(v => selected.has(v.name) && !v.error).map(v => v.name);
+  try {
+    await api("/api/start", Object.assign({ dir: currentDir, files }, s));
+    showMsg("runMsg", "已开始。可以把窗口最小化，压缩期间不要退出本程序。", "info");
+    poll();
+  } catch (e) { showMsg("runMsg", e.message, "err"); }
+};
+$("stopBtn").onclick = async () => { await api("/api/stop", {}); showMsg("runMsg", "正在停止…已完成的分段会保留，下次可继续", "info"); };
+$("openBtn").onclick = () => api("/api/reveal", { dir: currentDir });
+
+async function poll() {
+  clearTimeout(pollTimer);
+  try {
+    jobState = await api("/api/status");
+    $("log").textContent = (jobState.log || []).join("\n") || "（暂无）";
+    if (jobState.dir && !currentDir) { currentDir = jobState.dir; $("dir").value = currentDir; await scan(currentDir); }
+    render();
+    if (jobState.running) { pollTimer = setTimeout(poll, 1000); }
+    else if (jobState.files && jobState.files.length) {
+      const done = jobState.files.filter(f => f.status === "done").length;
+      const failed = jobState.files.filter(f => f.status === "failed").length;
+      if (done || failed) showMsg("runMsg", `处理结束：完成 ${done} 个` + (failed ? `，失败 ${failed} 个（看状态栏或日志）` : ""), failed ? "err" : "info");
+      // 刷新列表，显示新生成的文件
+      if (currentDir) { const d = await api("/api/scan", { dir: currentDir }).catch(() => null); if (d) { videos = d.videos || videos; render(); } }
+    }
+  } catch (e) {
+    showMsg("runMsg", "读取进度失败：" + e.message, "err");
+  }
+}
+
+loadSettings();
+poll();
+</script>
+</body>
+</html>
