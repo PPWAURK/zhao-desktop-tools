@@ -1,4 +1,6 @@
 // Native features when running inside the Tauri app, browser fallbacks otherwise.
+import { useEffect, useState } from "react"
+import { getVersion } from "@tauri-apps/api/app"
 import { invoke, isTauri } from "@tauri-apps/api/core"
 
 export const isDesktop = (): boolean => isTauri()
@@ -16,6 +18,15 @@ export async function saveFile(blob: Blob, name: string): Promise<SaveOutcome> {
     headers: { "x-file-name": encodeURIComponent(name) },
   })
   return path ? { kind: "saved", path } : { kind: "cancelled" }
+}
+
+/** Installed app version (null in the browser or while loading). */
+export function useAppVersion(): string | null {
+  const [version, setVersion] = useState<string | null>(null)
+  useEffect(() => {
+    if (isDesktop()) getVersion().then(setVersion, () => setVersion(null))
+  }, [])
+  return version
 }
 
 export async function revealFile(path: string): Promise<void> {

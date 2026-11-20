@@ -52,7 +52,7 @@ export function Workspace({ month, previous, previousError, busy, onAddPrevious,
             Jours travaillés <Count value={gaps} />
           </TabsTrigger>
           <TabsTrigger value="longues" className="flex-none px-0">
-            Journées &gt; 9 h <Count value={result.longDays.length} />
+            Journées ≥ 9 h <Count value={result.longDays.length} />
           </TabsTrigger>
           <TabsTrigger value="primes" className="flex-none px-0">
             Primes <Count value={primes === null ? null : primes.length} />

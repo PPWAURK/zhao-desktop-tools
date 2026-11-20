@@ -9,8 +9,8 @@ function octWorkbook(employees) {
   return makeWorkbook({ ...OCT, employees });
 }
 
-test("flags days where the shifts of one day add up to more than 9 hours", () => {
-  // Arrange: two shifts on the same day (5 + 4.5 = 9.5 h), and a day of exactly 9 h
+test("flags days where the shifts of one day add up to 9 hours or more", () => {
+  // Arrange: two shifts on the same day (5 + 4.5 = 9.5 h), and a day of exactly 9 h (flagged)
   const wb = octWorkbook([
     { name: "Paul MARTIN", prime: 0, weeks: [{ no: 42, days: [
       ["Lundi 12 octobre", 5], ["Lundi 12 octobre", 4.5],
@@ -25,8 +25,17 @@ test("flags days where the shifts of one day add up to more than 9 hours", () =>
   // Assert
   assert.deepEqual(
     res.longDays.map((d) => [d.name, new Date(d.date).toISOString().slice(0, 10), d.hours]),
-    [["Paul MARTIN", "2026-10-12", 9.5], ["Paul MARTIN", "2026-10-14", 10.25]],
+    [["Paul MARTIN", "2026-10-12", 9.5], ["Paul MARTIN", "2026-10-13", 9], ["Paul MARTIN", "2026-10-14", 10.25]],
   );
+});
+
+test("a day summing to exactly 9 h from rounded shifts is flagged", () => {
+  // 3.83 + 5.17 is 9 within rounding (floating point gives 8.999999…)
+  const wb = octWorkbook([
+    { name: "Ines ROBERT", prime: 0, weeks: [{ no: 42, days: [["Jeudi 15 octobre", 3.83], ["Jeudi 15 octobre", 5.17]] }] },
+  ]);
+
+  assert.deepEqual(JourAbs.processWorkbook(wb).longDays.map((d) => d.hours), [9]);
 });
 
 test("ignores long days that belong to the neighbouring month", () => {
@@ -60,7 +69,7 @@ test("a double-booked slot is counted once, keeping the shorter shift", () => {
     [["Alex MOREAU", "EF+Riz", "18h00", "23h15", 5.25, 8.75, 14]]);
 });
 
-test("a day still above 9 h after removing a duplicate stays flagged", () => {
+test("a day still at 9 h or more after removing a duplicate stays flagged", () => {
   const wb = octWorkbook([
     { name: "Lea BERNARD", prime: 0, weeks: [{ no: 42, days: [
       ["Lundi 12 octobre", 5.5, "10h00", "16h00", "Salle"],
@@ -111,7 +120,7 @@ test("a shift ending exactly when the next starts is not an overlap", () => {
   assert.equal(JourAbs.processWorkbook(wb).longDays[0].overlap, false);
 });
 
-test("returns no long days when nobody works more than 9 hours", () => {
+test("returns no long days when everybody works less than 9 hours", () => {
   const wb = octWorkbook([
     { name: "Ines ROBERT", prime: 100, weeks: [{ no: 41, days: [["Samedi 10 octobre", 8.75]] }] },
   ]);

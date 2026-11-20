@@ -12,6 +12,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { revealFile, saveFile } from "@/lib/desktop"
 import { errorMessage } from "@/lib/excel"
 import { StartScreen } from "@/features/payroll/start-screen"
+import { UpdateBanner } from "@/features/updates/update-banner"
+import { useAppUpdate } from "@/features/updates/use-app-update"
 import { usePayroll } from "@/features/payroll/use-payroll"
 import { Workspace } from "@/features/payroll/workspace"
 
@@ -21,6 +23,7 @@ export default function App() {
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false) // blocks a second save before the re-render lands
   const picker = useFilePicker(openFiles, true)
+  const appUpdate = useAppUpdate()
   const drag = useWindowFileDrop(busy ? null : openFiles)
 
   const save = useCallback(async () => {
@@ -108,6 +111,7 @@ export default function App() {
         </div>
         {picker.input}
       </header>
+      <UpdateBanner state={appUpdate.state} onInstall={appUpdate.install} onDismiss={appUpdate.dismiss} />
 
       <main className="flex flex-1 flex-col">
         {state.error ? (

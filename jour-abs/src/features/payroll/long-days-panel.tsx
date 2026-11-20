@@ -10,7 +10,7 @@ import { formatDay, formatHours, groupLongDays } from "./format"
 import { RuleNotes } from "./rule-notes"
 
 const RULES = [
-  "Total des heures travaillées d'une même journée (colonne « Heures Travaillées », tous services cumulés), strictement supérieur à 9 h.",
+  "Total des heures travaillées d'une même journée (colonne « Heures Travaillées », tous services cumulés), égal ou supérieur à 9 h.",
   "Créneau planifié deux fois (les services se recouvrent sur au moins la moitié du plus court) : compté une seule fois, en gardant le service le plus court.",
   "Seuls les jours du 1er au dernier jour du mois sont comptés.",
 ]
@@ -102,8 +102,8 @@ export function LongDaysPanel({ longDays, duplicateShifts }: Props) {
         {duplicates}
         <Alert>
           <CircleCheck className="text-primary" />
-          <AlertTitle>Aucune journée de plus de 9 h</AlertTitle>
-          <AlertDescription>Personne ne dépasse 9 h de travail sur une journée ce mois-ci.</AlertDescription>
+          <AlertTitle>Aucune journée de 9 h ou plus</AlertTitle>
+          <AlertDescription>Personne ne travaille 9 h ou plus sur une journée ce mois-ci.</AlertDescription>
         </Alert>
         <RuleNotes items={RULES} />
       </div>
@@ -117,7 +117,7 @@ export function LongDaysPanel({ longDays, duplicateShifts }: Props) {
         <Alert variant="warning">
           <TriangleAlert />
           <AlertTitle>
-            {overlaps === 1 ? "1 journée de plus de 9 h avec des services qui se chevauchent" : `${overlaps} journées de plus de 9 h avec des services qui se chevauchent`}
+            {overlaps === 1 ? "1 journée de 9 h ou plus avec des services qui se chevauchent" : `${overlaps} journées de 9 h ou plus avec des services qui se chevauchent`}
           </AlertTitle>
           <AlertDescription>Survolez les jours marqués d'un triangle pour le détail.</AlertDescription>
         </Alert>

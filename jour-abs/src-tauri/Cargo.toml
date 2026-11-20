@@ -1,6 +1,6 @@
 [package]
 name = "jour-abs"
-version = "1.1.0"
+version = "1.1.1"
 description = "Super Xiaona"
 edition = "2021"
 
@@ -15,9 +15,14 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [profile.release]
 codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
