@@ -22,7 +22,7 @@ const JourAbs = (function () {
   var NET_NOTE = "JOUR ABS net du mois = total JOUR ABS - total JOURS EN +. " +
     "Équivaut à 22 - (22 - absences + jours en plus), exemple: 1 + 2 - 1 - 0,5 = 1,5 jour.";
   var DAY_MS = 86400000;
-  var LONG_DAY_H = 9; // a day is flagged when its shifts add up to more than this
+  var LONG_DAY_H = 9; // a day is flagged when its shifts add up to this many hours or more
   var PRIME_MIN_EUR = 250; // prime increases are flagged only above this amount
   var PRIME_HEADER = "Primes (€)";
   var PRIME_COL = 27; // AA: used when the header is not found
@@ -299,14 +299,14 @@ const JourAbs = (function () {
   }
 
   /**
-   * Days of the month where an employee worked more than LONG_DAY_H. A double-booked slot is
+   * Days of the month where an employee worked LONG_DAY_H hours or more. A double-booked slot is
    * counted once (see splitDuplicates); exportHours keeps the total as exported.
    */
   function findLongDays(blocks, period) {
     var out = [];
     forEachMonthDay(blocks, period, function (emp, d) {
       var worked = dayWorked(d);
-      if (worked.hours > LONG_DAY_H) {
+      if (worked.hours >= LONG_DAY_H) {
         out.push({ name: emp.name, date: d.date, hours: worked.hours, exportHours: round2(d.hours),
           overlap: hasOverlap(d.shifts) });
       }

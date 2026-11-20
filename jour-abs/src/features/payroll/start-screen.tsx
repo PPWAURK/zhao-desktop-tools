@@ -2,6 +2,7 @@ import { CalendarCheck2, Clock4, FileSpreadsheet, Loader2, TrendingUp } from "lu
 
 import { DropZone } from "@/components/file-drop"
 import { MOD_KEY } from "@/components/use-shortcut"
+import { useAppVersion } from "@/lib/desktop"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 
@@ -13,7 +14,7 @@ const CHECKS = [
   },
   {
     icon: Clock4,
-    title: "Journées de plus de 9 h",
+    title: "Journées de 9 h ou plus",
     text: "Tous services cumulés, avec les créneaux qui se chevauchent dans le planning.",
   },
   {
@@ -26,6 +27,7 @@ const CHECKS = [
 type Props = { busy: boolean; onFiles: (files: File[]) => void; onBrowse: () => void }
 
 export function StartScreen({ busy, onFiles, onBrowse }: Props) {
+  const version = useAppVersion()
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 sm:py-16">
       <DropZone onFiles={onFiles} disabled={busy} className="bg-card">
@@ -66,6 +68,7 @@ export function StartScreen({ busy, onFiles, onBrowse }: Props) {
 
       <p className="text-center text-xs text-muted-foreground">
         Les fichiers sont traités sur cet ordinateur ; rien n'est envoyé sur internet. Le fichier d'origine n'est jamais modifié.
+        {version ? <span className="mt-1 block">Super Xiaona {version}</span> : null}
       </p>
     </div>
   )

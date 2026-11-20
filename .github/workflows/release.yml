@@ -110,6 +110,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Signs the in-app update packages (apps with the updater plugin verify this signature).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           projectPath: ${{ env.APP }}
           tauriScript: pnpm tauri
@@ -130,9 +133,28 @@ jobs:
           echo "$names"
           echo "$names" | grep -qiE '\.(exe|msi)$' || { echo "Windows installer missing" >&2; exit 1; }
           echo "$names" | grep -qiE '\.dmg$' || { echo "macOS DMG missing" >&2; exit 1; }
+          if [ "${{ needs.prepare.outputs.app }}" = "jour-abs" ]; then
+            echo "$names" | grep -qx 'latest.json' || { echo "Update manifest latest.json missing (is TAURI_SIGNING_PRIVATE_KEY set?)" >&2; exit 1; }
+          fi
 
       - name: Publish the draft
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
         run: gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=true --jq .html_url
+
+      # Installed apps read <app>-updates/latest.json (a fixed URL), so each app has its own channel.
+      - name: Point the update channel at this version
+        if: needs.prepare.outputs.app == 'jour-abs'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          channel="${GITHUB_REF_NAME%-v*}-updates"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir update
+          if ! gh release view "$channel" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$channel" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Super Xiaona — canal de mise à jour" \
+              --notes "Fichier lu par la mise à jour automatique de l'application. Ne pas supprimer."
+          fi
+          gh release upload "$channel" update/latest.json --repo "$GITHUB_REPOSITORY" --clobber
+          echo "Update channel now serves: $(jq -r .version update/latest.json)"

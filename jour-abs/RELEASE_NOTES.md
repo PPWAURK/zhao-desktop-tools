@@ -5,10 +5,17 @@
 | Windows 10/11 | `Super Xiaona_…_x64-setup.exe` |
 | macOS 11+（Apple 芯片和 Intel 都可以 / puce Apple et Intel） | `Super Xiaona_…_universal.dmg` |
 
+## 1.1.1
+
+- **软件内自动更新**：以后有新版本时，打开软件会出现提示，点「Mettre à jour」即可下载安装并自动重启，不用再手动下载。**这一版需要手动安装一次**，之后都自动更新。
+  *Mise à jour intégrée : quand une nouvelle version sort, un bandeau apparaît au lancement ; « Mettre à jour » l'installe et redémarre l'application. **Installez cette version une fois à la main**, les suivantes arriveront automatiquement.*
+- 工作时长记录改为 **9 小时及以上**（以前是超过 9 小时）。/ Les journées de **9 h ou plus** sont désormais signalées (auparavant : plus de 9 h).
+- 启动时软件会联网检查是否有新版本（只检查版本，不上传任何文件）。/ Au lancement, l'application vérifie en ligne si une nouvelle version existe (aucun fichier n'est envoyé).
+
 ## 新功能
 
 - 全新界面（shadcn），新 logo。
-- **每天超过 9 小时**：同一天所有班次相加，只算当月的日子；按员工分组显示。
+- **每天 9 小时及以上**：同一天所有班次相加，只算当月的日子；按员工分组显示。
 - **同一时段排了两次班**：只算较短的那个班次（例如 4 h + 4,75 h，而不是 14 h），并单独列出，方便在排班系统里改正。
 - **奖金（prime）上涨**：本月奖金高于 250 € 且比上个月高。可以同时拖入两个月的文件，顺序随意。
 - JOUR ABS 计算规则不变。
@@ -16,7 +23,7 @@
 ## Nouveautés
 
 - Nouvelle interface et nouveau logo.
-- **Journées de plus de 9 h**, par employé (tous services cumulés, jours du mois uniquement).
+- **Journées de 9 h ou plus**, par employé (tous services cumulés, jours du mois uniquement).
 - **Créneaux planifiés deux fois** : comptés une seule fois (le service le plus court), et listés pour correction dans le planning.
 - **Primes supérieures à 250 € et en hausse** par rapport au mois précédent : déposez les deux mois ensemble, dans n'importe quel ordre.
 - Calcul JOUR ABS inchangé.

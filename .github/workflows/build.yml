@@ -47,8 +47,10 @@ jobs:
         working-directory: ${{ matrix.app }}/src-tauri
         run: cargo test -- --include-ignored
 
+      # CI only checks that the app builds; signed in-app update packages are made by release.yml.
       - name: Build installer
-        run: pnpm tauri build
+        shell: bash
+        run: pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - uses: actions/upload-artifact@v4
         with:
