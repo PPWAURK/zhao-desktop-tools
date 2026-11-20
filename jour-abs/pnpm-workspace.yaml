@@ -1,5 +1,8 @@
 packages: []
 
+# Same supply-chain rule as CI: ignore package versions published less than a day ago.
+minimumReleaseAge: 1440
+
 allowBuilds:
   esbuild: true
   msw: false
