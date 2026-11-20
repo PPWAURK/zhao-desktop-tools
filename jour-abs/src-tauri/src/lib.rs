@@ -1,4 +1,4 @@
-//! Calcul JOUR ABS desktop shell.
+//! Super Xiaona desktop shell.
 //!
 //! All calculation happens in the web page (ExcelJS + JourAbs logic). The Rust side
 //! only provides what a plain browser page cannot do well inside a desktop app:
@@ -109,7 +109,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![save_xlsx, reveal_file])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
-            eprintln!("error while running Calcul JOUR ABS: {e}");
+            eprintln!("error while running Super Xiaona: {e}");
             std::process::exit(1);
         });
 }

@@ -1,22 +1,24 @@
 // Test helpers: load the vendored browser build of ExcelJS and build workbooks
 // laid out like the "Fiche employés" sheet of the monthly export.
-"use strict";
-const fs = require("fs");
-const path = require("path");
-const vm = require("vm");
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import JourAbs from "../src/lib/jour-abs-core.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function loadExcelJS() {
   const ctx = { console, setTimeout, clearTimeout, setImmediate, TextDecoder, TextEncoder, Promise, Uint8Array, ArrayBuffer };
   ctx.global = ctx;
   ctx.self = ctx;
   vm.createContext(ctx);
-  const src = fs.readFileSync(path.join(__dirname, "../src/vendor/exceljs.min.js"), "utf8");
+  const src = fs.readFileSync(path.join(__dirname, "../public/vendor/exceljs.min.js"), "utf8");
   vm.runInContext(src, ctx);
   return ctx.ExcelJS;
 }
 
 const ExcelJS = loadExcelJS();
-const JourAbs = require("../src/jour-abs-core.js");
 
 const pad = (n) => String(n).padStart(2, "0");
 const fmt = (d) => `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
@@ -47,9 +49,10 @@ function makeWorkbook(spec) {
       ws.getCell(r, 3).value = "-";
       ws.getCell(r, 4).value = w.contract || "CDI";
       ws.getCell(r, 5).value = w.volume ?? 39;
-      for (const [label, hours, start, end] of w.days || []) {
+      for (const [label, hours, start, end, poste] of w.days || []) {
         r += 1;
         ws.getCell(r, 1).value = label;
+        if (poste) ws.getCell(r, 2).value = poste;
         ws.getCell(r, 12).value = hours;
         if (start) ws.getCell(r, 7).value = start;
         if (end) ws.getCell(r, 8).value = end;
@@ -60,4 +63,4 @@ function makeWorkbook(spec) {
   return wb;
 }
 
-module.exports = { ExcelJS, JourAbs, makeWorkbook };
+export { ExcelJS, JourAbs, makeWorkbook };

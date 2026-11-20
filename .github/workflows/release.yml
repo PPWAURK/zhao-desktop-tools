@@ -1,0 +1,138 @@
+name: Release
+
+# Push a tag to publish a Windows + macOS release of one app:
+#   super-xiaona-v1.1.0      -> jour-abs (Super Xiaona)
+#   video-compressor-v1.0.0  -> video-compressor
+on:
+  push:
+    tags:
+      - "super-xiaona-v*"
+      - "video-compressor-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.app.outputs.app }}
+      release_id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve app from tag
+        id: app
+        shell: bash
+        run: |
+          case "$GITHUB_REF_NAME" in
+            super-xiaona-v*)     echo "app=jour-abs" >> "$GITHUB_OUTPUT"; echo "title=Super Xiaona" >> "$GITHUB_OUTPUT" ;;
+            video-compressor-v*) echo "app=video-compressor" >> "$GITHUB_OUTPUT"; echo "title=视频压缩工具" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Unknown tag $GITHUB_REF_NAME" >&2; exit 1 ;;
+          esac
+
+      - name: Create draft release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: ${{ steps.app.outputs.title }}
+          APP: ${{ steps.app.outputs.app }}
+        run: |
+          version="${GITHUB_REF_NAME##*-v}"
+          notes_file="$APP/RELEASE_NOTES.md"
+          [ -f "$notes_file" ] || notes_file=/dev/null
+          # The REST call returns the draft's id directly (drafts are not found by tag lookups).
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$GITHUB_REF_NAME" -f name="$TITLE $version" \
+            -F draft=true -F body=@"$notes_file" --jq .id)
+          if [ -z "$id" ]; then echo "Could not create the draft release" >&2; exit 1; fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    env:
+      APP: ${{ needs.prepare.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Super Xiaona has no native sidecar, so its Mac build is universal (Apple chip + Intel).
+      # The video compressor bundles an Apple-chip ffmpeg, so it stays Apple-chip only.
+      - name: Choose build options
+        id: opts
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            echo "args=--bundles nsis" >> "$GITHUB_OUTPUT"
+            echo "targets=" >> "$GITHUB_OUTPUT"
+          elif [ "$APP" = "jour-abs" ]; then
+            echo "args=--target universal-apple-darwin --bundles app,dmg" >> "$GITHUB_OUTPUT"
+            echo "targets=aarch64-apple-darwin,x86_64-apple-darwin" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=--bundles app,dmg" >> "$GITHUB_OUTPUT"
+            echo "targets=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ${{ env.APP }}/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ steps.opts.outputs.targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.APP }}/src-tauri
+
+      - name: Install JS dependencies
+        working-directory: ${{ env.APP }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and upload installers
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          projectPath: ${{ env.APP }}
+          tauriScript: pnpm tauri
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          args: ${{ steps.opts.outputs.args }}
+
+  publish:
+    name: Publish release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that both installers are attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          names=$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.assets[].name')
+          echo "$names"
+          echo "$names" | grep -qiE '\.(exe|msi)$' || { echo "Windows installer missing" >&2; exit 1; }
+          echo "$names" | grep -qiE '\.dmg$' || { echo "macOS DMG missing" >&2; exit 1; }
+
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=true --jq .html_url
