@@ -177,16 +177,22 @@ impl Runner {
     }
 
     /// Runs ffmpeg, calling `on_progress(seconds_done, speed)` from `-progress pipe:1` output.
+    /// `cwd` lets callers pass short relative paths (see the concat step).
     pub fn run(
         &self,
         ffmpeg: &Path,
         args: &[String],
+        cwd: Option<&Path>,
         mut on_progress: impl FnMut(f64, Option<&str>),
     ) -> Result<(), RunError> {
         if self.is_cancelled() {
             return Err(RunError::Cancelled);
         }
-        let mut child = platform::command(ffmpeg)
+        let mut cmd = platform::command(ffmpeg);
+        if let Some(dir) = cwd {
+            cmd.current_dir(dir);
+        }
+        let mut child = cmd
             .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
