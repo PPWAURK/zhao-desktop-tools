@@ -1,5 +1,6 @@
-/* Core logic for JOUR ABS (works in the browser and in Node). See README.md for the rules. */
-(function (root) {
+/* Core logic for JOUR ABS: reads the monthly "Fiche employés" export, writes JOUR ABS columns,
+   and lists long days and prime increases. Plain ES module, used by the app and the Node tests. */
+const JourAbs = (function () {
   "use strict";
 
   var SHEET = "Fiche employés";
@@ -112,9 +113,17 @@
     return PRIME_COL;
   }
 
+  /** Amount in euros; an empty cell is 0; anything unreadable (text, formula error) is null. */
+  function parseAmount(v) {
+    if (v === null || v === undefined || v === "") return 0;
+    if (typeof v === "number") return isFinite(v) ? v : null;
+    if (typeof v !== "string") return null;
+    var s = v.replace(/[\s\u00a0\u202f€]/g, "").replace(",", ".");
+    return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : null;
+  }
+
   function readPrime(ws, totalRow) {
-    var v = cellValue(ws.getCell(totalRow, primeColumn(ws, totalRow - 1)));
-    return typeof v === "number" && isFinite(v) ? v : 0;
+    return parseAmount(cellValue(ws.getCell(totalRow, primeColumn(ws, totalRow - 1))));
   }
 
   /** "18h00" -> minutes since midnight, or null ("toute la journée", empty). */
@@ -123,11 +132,43 @@
     return m ? +m[1] * 60 + +m[2] : null;
   }
 
-  /** Start/end of a day row (columns G and H); an end before the start runs past midnight. */
-  function readShift(ws, r) {
-    var start = parseClock(text(ws, r, 7)), end = parseClock(text(ws, r, 8));
+  /** A timed day row: start/end in minutes (an end before the start runs past midnight). */
+  function readShift(ws, r, hours) {
+    var startText = text(ws, r, 7).trim(), endText = text(ws, r, 8).trim();
+    var start = parseClock(startText), end = parseClock(endText);
     if (start === null || end === null) return null;
-    return { start: start, end: end <= start ? end + 24 * 60 : end };
+    return { start: start, end: end <= start ? end + 24 * 60 : end, startText: startText, endText: endText,
+      hours: hours, poste: text(ws, r, 2).trim() };
+  }
+
+  function overlapMinutes(a, b) {
+    return Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start));
+  }
+
+  /** Same slot planned twice: they overlap by at least half of the shorter shift. */
+  function isDuplicateSlot(a, b) {
+    var shorter = Math.min(a.end - a.start, b.end - b.start);
+    return shorter > 0 && overlapMinutes(a, b) * 2 >= shorter;
+  }
+
+  /**
+   * A double-booked slot is counted once: the shorter shift (fewest hours) is kept, the other is
+   * set aside. Small partial overlaps keep both shifts.
+   */
+  function splitDuplicates(shifts) {
+    var byHours = shifts.slice().sort(function (a, b) { return a.hours - b.hours || a.start - b.start; });
+    return byHours.reduce(function (acc, sh) {
+      var dup = acc.kept.some(function (k) { return isDuplicateSlot(k, sh); });
+      return dup ? { kept: acc.kept, removed: acc.removed.concat([sh]) }
+        : { kept: acc.kept.concat([sh]), removed: acc.removed };
+    }, { kept: [], removed: [] });
+  }
+
+  /** Hours actually worked in a day: untimed rows plus timed shifts, duplicates counted once. */
+  function dayWorked(day) {
+    var split = splitDuplicates(day.shifts);
+    var timed = split.kept.reduce(function (sum, sh) { return sum + sh.hours; }, 0);
+    return { hours: round2(day.untimedHours + timed), removed: split.removed };
   }
 
   /** True when two shifts of the same day share some time (touching ends do not count). */
@@ -155,10 +196,12 @@
           var d = labelDate(text(ws, q, 1), period);
           var h = cellValue(ws.getCell(q, 12));
           h = typeof h === "number" ? h : 0;
-          if (idx[d] === undefined) { idx[d] = days.length; days.push({ date: d, hours: 0, shifts: [] }); }
-          days[idx[d]].hours += h;
-          var shift = readShift(ws, q);
-          if (shift && h > 0) days[idx[d]].shifts.push(shift);
+          if (idx[d] === undefined) { idx[d] = days.length; days.push({ date: d, hours: 0, untimedHours: 0, shifts: [] }); }
+          var day = days[idx[d]];
+          day.hours += h; // as exported (used for JOUR ABS, unchanged)
+          var shift = h > 0 ? readShift(ws, q, h) : null;
+          if (shift) day.shifts.push(shift);
+          else day.untimedHours += h;
           q++;
         }
         var vol = cellValue(ws.getCell(r, 5));
@@ -245,17 +288,40 @@
 
   function round2(n) { return Math.round(n * 100) / 100; }
 
-  /** Days of the month where one employee's shifts add up to more than LONG_DAY_H. */
-  function findLongDays(blocks, period) {
-    var out = [];
+  function forEachMonthDay(blocks, period, fn) {
     blocks.forEach(function (emp) {
       emp.weeks.forEach(function (w) {
         w.days.forEach(function (d) {
-          var inMonth = d.date !== null && d.date >= period.first && d.date <= period.last;
-          if (inMonth && round2(d.hours) > LONG_DAY_H) {
-            out.push({ name: emp.name, date: d.date, hours: round2(d.hours), overlap: hasOverlap(d.shifts) });
-          }
+          if (d.date !== null && d.date >= period.first && d.date <= period.last) fn(emp, d);
         });
+      });
+    });
+  }
+
+  /**
+   * Days of the month where an employee worked more than LONG_DAY_H. A double-booked slot is
+   * counted once (see splitDuplicates); exportHours keeps the total as exported.
+   */
+  function findLongDays(blocks, period) {
+    var out = [];
+    forEachMonthDay(blocks, period, function (emp, d) {
+      var worked = dayWorked(d);
+      if (worked.hours > LONG_DAY_H) {
+        out.push({ name: emp.name, date: d.date, hours: worked.hours, exportHours: round2(d.hours),
+          overlap: hasOverlap(d.shifts) });
+      }
+    });
+    return out;
+  }
+
+  /** Shifts set aside because they double-book a slot (the export still counts them). */
+  function findDuplicateShifts(blocks, period) {
+    var out = [];
+    forEachMonthDay(blocks, period, function (emp, d) {
+      var worked = dayWorked(d);
+      worked.removed.forEach(function (sh) {
+        out.push({ name: emp.name, date: d.date, poste: sh.poste, start: sh.startText, end: sh.endText,
+          hours: sh.hours, dayHours: worked.hours, exportHours: round2(d.hours) });
       });
     });
     return out;
@@ -280,12 +346,21 @@
     (previous || []).forEach(function (p) { before[normalizeName(p.name)] = p.prime; });
     return (current || []).reduce(function (rows, c) {
       var key = normalizeName(c.name);
-      var prev = Object.prototype.hasOwnProperty.call(before, key) ? before[key] : null;
-      if (c.prime > min && c.prime > (prev === null ? 0 : prev)) {
+      var absent = !Object.prototype.hasOwnProperty.call(before, key);
+      var prev = absent ? null : before[key];
+      if (c.prime === null || (!absent && prev === null)) return rows; // unreadable: see unreadablePrimes
+      if (c.prime > min && c.prime > (absent ? 0 : prev)) {
         rows.push({ name: c.name, prime: c.prime, previous: prev, increase: round2(c.prime - (prev || 0)) });
       }
       return rows;
     }, []);
+  }
+
+  /** Names whose prime cell could not be read, so they were left out of the comparison. */
+  function unreadablePrimes(current, previous) {
+    var bad = function (list) { return (list || []).filter(function (p) { return p.prime === null; }); };
+    return bad(current).map(function (p) { return p.name; })
+      .concat(bad(previous).map(function (p) { return p.name + " (mois précédent)"; }));
   }
 
   /** True when period `prev` is the calendar month right before period `cur`. */
@@ -308,7 +383,7 @@
   function readSummary(wb) {
     var s = loadSheet(wb);
     return { period: s.period, employees: s.blocks.length, primes: listPrimes(s.blocks),
-      longDays: findLongDays(s.blocks, s.period) };
+      longDays: findLongDays(s.blocks, s.period), duplicateShifts: findDuplicateShifts(s.blocks, s.period) };
   }
 
   function processWorkbook(wb) {
@@ -316,13 +391,16 @@
     var report = compute(s.blocks, s.period);
     write(s.ws, s.blocks);
     return { period: s.period, employees: s.blocks.length, report: report,
-      primes: listPrimes(s.blocks), longDays: findLongDays(s.blocks, s.period) };
+      primes: listPrimes(s.blocks), longDays: findLongDays(s.blocks, s.period),
+      duplicateShifts: findDuplicateShifts(s.blocks, s.period) };
   }
 
   var api = {
     processWorkbook: processWorkbook, readSummary: readSummary, primeIncreases: primeIncreases,
+    unreadablePrimes: unreadablePrimes,
     isPreviousMonth: isPreviousMonth, dayCredit: dayCredit, LONG_DAY_H: LONG_DAY_H, PRIME_MIN_EUR: PRIME_MIN_EUR
   };
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
-  else root.JourAbs = api;
-})(typeof window !== "undefined" ? window : this);
+  return api;
+})();
+
+export default JourAbs;

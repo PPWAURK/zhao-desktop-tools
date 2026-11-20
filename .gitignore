@@ -2,3 +2,4 @@ node_modules/
 target/
 **/src-tauri/gen/
 .DS_Store
+dist/
